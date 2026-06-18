@@ -1,0 +1,80 @@
+# ── ConfigMap ──────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: monitoring
+data:
+  kibana.yml: |
+    server.host: "0.0.0.0"
+    server.name: "kibana-minikube"
+    elasticsearch.hosts: ["http://elasticsearch:9200"]
+    xpack.security.enabled: false
+    telemetry.enabled: false
+
+---
+# ── Service ────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+spec:
+  selector:
+    app: kibana
+  ports:
+    - name: http
+      port: 5601
+      targetPort: 5601
+      nodePort: 30601
+  type: NodePort    # NodePort pour accéder depuis l'extérieur sur Minikube
+
+---
+# ── Deployment ─────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+        - name: kibana
+          image: docker.elastic.co/kibana/kibana:8.12.0
+          ports:
+            - containerPort: 5601
+          env:
+            - name: ELASTICSEARCH_HOSTS
+              value: "http://elasticsearch:9200"
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+          volumeMounts:
+            - name: config
+              mountPath: /usr/share/kibana/config/kibana.yml
+              subPath: kibana.yml
+          readinessProbe:
+            httpGet:
+              path: /api/status
+              port: 5601
+            initialDelaySeconds: 60
+            periodSeconds: 10
+
+      volumes:
+        - name: config
+          configMap:
+            name: kibana-config
