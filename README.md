@@ -86,42 +86,6 @@ The project is divided into 3 parts:
 
 ---
 
-## FR — Démarrage
-
-```bash
-# Démarrer Minikube
-minikube start
-
-# Partie 2 : Déployer les apps
-kubectl apply -f partie2-apps/hello_world/k8s/
-kubectl apply -f partie2-apps/hello-angular/k8s/
-
-# Partie 3 : Stack ELK
-kubectl apply -f partie3-elk/00-namespace.yaml
-kubectl apply -f partie3-elk/01-elasticsearch.yaml
-kubectl apply -f partie3-elk/02-kibana.yaml
-kubectl apply -f partie3-elk/03-filebeat.yaml
-```
-
-## EN — Getting Started
-
-```bash
-# Start Minikube
-minikube start
-
-# Part 2: Deploy apps
-kubectl apply -f partie2-apps/hello_world/k8s/
-kubectl apply -f partie2-apps/hello-angular/k8s/
-
-# Part 3: ELK Stack
-kubectl apply -f partie3-elk/00-namespace.yaml
-kubectl apply -f partie3-elk/01-elasticsearch.yaml
-kubectl apply -f partie3-elk/02-kibana.yaml
-kubectl apply -f partie3-elk/03-filebeat.yaml
-```
-
----
-
 ## Project Structure
 
 ```
