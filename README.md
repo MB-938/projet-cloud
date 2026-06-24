@@ -37,7 +37,6 @@ Le projet est divisé en 3 parties :
 - **Kibana** : Interface de visualisation des logs
 - **Filebeat** : Agent de collecte des logs des pods Kubernetes, envoyés vers Elasticsearch
 
-**Concepts démontrés :**
 - Déploiement multi-applicatif sur Kubernetes (namespaces, Deployments, Services)
 - Pipeline Jenkins → Docker Hub → `kubectl set image` (rolling update)
 - Observabilité : collecte des logs applicatifs avec Filebeat DaemonSet
@@ -61,7 +60,6 @@ The project is divided into 3 parts:
 - **Kibana**: Log visualization UI
 - **Filebeat**: Agent collecting Kubernetes pod logs, forwarding to Elasticsearch
 
-**Concepts demonstrated:**
 - Multi-application deployment on Kubernetes (namespaces, Deployments, Services)
 - Jenkins pipeline → Docker Hub → `kubectl set image` (rolling update)
 - Observability: application log collection with Filebeat DaemonSet
