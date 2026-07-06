@@ -1,12 +1,8 @@
-# k8s-lambda-fullstack-elk
+# Kubernetes Observability — ELK, Filebeat & CI/CD for Multi-App Deployments
 
-> **FR** — Projet full-stack cloud-native : AWS Lambda (Python), Spring Boot + Angular déployés sur Kubernetes (Minikube), pipeline CI/CD Jenkins, et stack ELK pour la centralisation des logs.
+> **FR** — Deux applications (Spring Boot, Angular) déployées sur Kubernetes via un pipeline Jenkins commun (tests, build, push, deploy, cleanup), avec centralisation des logs via une stack ELK et un DaemonSet Filebeat. Une fonction AWS Lambda (Python) illustre le compute serverless en complément du cluster.
 >
-> **EN** — Cloud-native full-stack project: AWS Lambda (Python), Spring Boot + Angular deployed on Kubernetes (Minikube), Jenkins CI/CD pipeline, and ELK stack for log centralization.
-
----
-
-## Stack
+> **EN** — Two applications (Spring Boot, Angular) deployed to Kubernetes through a shared Jenkins pipeline (test, build, push, deploy, cleanup), with centralized logging via an ELK stack and a Filebeat DaemonSet. An AWS Lambda function (Python) demonstrates serverless compute alongside the cluster.
 
 ![Kubernetes](https://img.shields.io/badge/Kubernetes-Minikube-326CE5?logo=kubernetes)
 ![AWS Lambda](https://img.shields.io/badge/AWS-Lambda-orange?logo=amazonaws)
@@ -18,93 +14,103 @@
 
 ---
 
-## FR — Architecture
+## Problem
 
-Le projet est divisé en 3 parties :
+Once more than one application runs on a cluster, "SSH in and `tail` the logs" stops working — pods get rescheduled, restarted, and scaled, taking their local logs with them. And a CI/CD pipeline that only knows how to build one kind of application (say, a Java one) breaks the moment a second, structurally different application (a Node-based Angular frontend) joins the same deployment target. This project addresses both: a pipeline that treats two different tech stacks uniformly, and a logging layer that survives pods disappearing.
 
-### Partie 1 — Infrastructure Serverless (AWS Lambda)
-- Fonction Lambda Python déployée sur AWS
-- Déclenchée via un événement (ex : requête HTTP via API Gateway)
-- Démo de l'architecture serverless en complément du cluster Kubernetes
+## Solution
 
-### Partie 2 — Applications sur Kubernetes
-- **Spring Boot** : API REST Java containerisée, déployée dans Minikube avec un `Deployment` + `Service`
-- **Angular** : Frontend containerisé (nginx), déployé dans Minikube avec un `Deployment` + `Service`
-- **Jenkins** : Pipeline CI/CD qui build les images Docker, les pousse sur Docker Hub, et met à jour les déploiements Kubernetes
+A single parameterized Jenkins pipeline runs test → build → push → deploy → cleanup for both a Spring Boot API and an Angular frontend, reusing shared pipeline functions (`jenkins/pipeline.groovy`) parameterized by working directory and image name rather than duplicating stages per app. Logs from every pod in the `apps` namespace are collected by a **Filebeat DaemonSet** (one collector per node, not per pod) and shipped to **Elasticsearch**, visualized in **Kibana** — so a pod's logs remain queryable long after the pod itself is gone. A standalone **AWS Lambda** function demonstrates the serverless alternative to always-on cluster compute.
 
-### Partie 3 — Stack ELK (centralisation des logs)
-- **Elasticsearch** : Stockage et indexation des logs
-- **Kibana** : Interface de visualisation des logs
-- **Filebeat** : Agent de collecte des logs des pods Kubernetes, envoyés vers Elasticsearch
+## Architecture
 
-- Déploiement multi-applicatif sur Kubernetes (namespaces, Deployments, Services)
-- Pipeline Jenkins → Docker Hub → `kubectl set image` (rolling update)
-- Observabilité : collecte des logs applicatifs avec Filebeat DaemonSet
+```mermaid
+flowchart TB
+    subgraph CI["Jenkins Pipeline (shared stages)"]
+        T1["Test\nmvnw test / ng test"] --> B1["Build & Push\nDocker Hub"]
+        B1 --> D1["Deploy\nkubectl set image"]
+        D1 --> CL["Cleanup"]
+    end
 
-## EN — Architecture
+    subgraph K8s["Kubernetes — namespace: apps"]
+        SB["springboot-hello\nDeployment + Service"]
+        NG["angular-hello\nDeployment + Service"]
+    end
 
-The project is divided into 3 parts:
+    subgraph Obs["Observability"]
+        FB["Filebeat\nDaemonSet — 1 per node"]
+        ES[("Elasticsearch")]
+        KB["Kibana"]
+    end
 
-### Part 1 — Serverless Infrastructure (AWS Lambda)
-- Python Lambda function deployed on AWS
-- Triggered via an event (e.g., HTTP request via API Gateway)
-- Demonstrates serverless architecture alongside the Kubernetes cluster
+    D1 --> SB
+    D1 --> NG
+    FB -->|"reads container logs\nfrom every node"| SB
+    FB --> NG
+    FB --> ES
+    ES --> KB
 
-### Part 2 — Applications on Kubernetes
-- **Spring Boot**: Java REST API containerized, deployed in Minikube with a `Deployment` + `Service`
-- **Angular**: Containerized frontend (nginx), deployed in Minikube with a `Deployment` + `Service`
-- **Jenkins**: CI/CD pipeline that builds Docker images, pushes to Docker Hub, and updates Kubernetes deployments
+    LAMBDA["AWS Lambda (Python)\nstandalone, event-triggered"]
+```
 
-### Part 3 — ELK Stack (log centralization)
-- **Elasticsearch**: Log storage and indexing
-- **Kibana**: Log visualization UI
-- **Filebeat**: Agent collecting Kubernetes pod logs, forwarding to Elasticsearch
+## Skills demonstrated
 
-- Multi-application deployment on Kubernetes (namespaces, Deployments, Services)
-- Jenkins pipeline → Docker Hub → `kubectl set image` (rolling update)
-- Observability: application log collection with Filebeat DaemonSet
+- Designing one CI/CD pipeline that's reused across structurally different applications (JVM + Node) via parameterization, instead of one pipeline per stack
+- DaemonSet-based log collection: understanding why Filebeat runs one-per-node rather than as a sidecar per pod, and what that implies for node-level log access
+- Running automated tests (`mvnw test`, `ng test`) as a real pipeline gate, with JUnit report publishing — not just build-and-ship
+- Recognizing serverless (Lambda) as a distinct compute model worth knowing alongside container orchestration, not a replacement for it
+
+## Key technical decisions
+
+| Decision | Why |
+|---|---|
+| Shared Groovy pipeline functions, parameterized by directory/image name | Avoids a near-duplicate Jenkinsfile per application; adding a third app means calling the same functions with different arguments. |
+| Filebeat as a DaemonSet, not a sidecar | One log collector per node reads every pod's logs on that node; a sidecar-per-pod would multiply the collector count for no benefit here. |
+| Lambda kept as a standalone component | Serverless and cluster-based compute solve different problems; forcing Lambda's logic into the cluster would obscure that distinction. |
+
+## Limitations
+
+- No log retention/rotation policy configured on Elasticsearch — a real deployment would need an ILM (Index Lifecycle Management) policy.
+- Filebeat ships logs but no alerting is configured in Kibana yet.
+- Lambda is demonstrated standalone; it isn't wired into the same CI/CD pipeline as the two cluster applications.
+
+## Roadmap
+
+- [ ] Add an Elasticsearch ILM policy for log retention
+- [ ] Add Kibana alerting rules on error-level log volume
+- [ ] Extend the Jenkins pipeline to also package and deploy the Lambda function
 
 ---
 
-## FR — Prérequis
+## Prerequisites
 
-- Docker Desktop
-- Minikube + kubectl
-- AWS CLI (pour la partie Lambda)
-- Compte Docker Hub
-- Jenkins (local ou sur une VM)
-
-## EN — Prerequisites
-
-- Docker Desktop
-- Minikube + kubectl
+- Docker Desktop, Minikube, `kubectl`
 - AWS CLI (for the Lambda part)
-- Docker Hub account
+- A Docker Hub account
 - Jenkins (local or on a VM)
-
----
 
 ## Project Structure
 
 ```
 .
-├── Jenkinsfile                         # CI/CD pipeline (build + push + deploy)
-├── partie1-infra/
+├── Jenkinsfile                          # Shared pipeline: test → build → push → deploy → cleanup
+├── jenkins/pipeline.groovy              # Reusable stage functions, parameterized per app
+├── serverless/
 │   └── lambda/
-│       └── lambda_function.py         # AWS Lambda function (Python)
-├── partie2-apps/
-│   ├── hello_world/                   # Spring Boot REST API
+│       └── lambda_function.py           # AWS Lambda function (Python)
+├── apps/
+│   ├── hello_world/                     # Spring Boot REST API
 │   │   ├── src/
 │   │   ├── Dockerfile
 │   │   ├── pom.xml
 │   │   └── k8s/deployment.yaml
-│   └── hello-angular/                 # Angular frontend
+│   └── hello-angular/                   # Angular frontend
 │       ├── src/
 │       ├── Dockerfile
 │       └── k8s/deployment.yaml
-└── partie3-elk/
+└── observability/
     ├── 00-namespace.yaml
     ├── 01-elasticsearch.yaml
     ├── 02-kibana.yaml
-    └── 03-filebeat.yaml               # Filebeat DaemonSet
+    └── 03-filebeat.yaml                 # Filebeat DaemonSet
 ```

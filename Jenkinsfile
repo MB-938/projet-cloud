@@ -5,8 +5,8 @@ pipeline {
 
     environment {
         DOCKERHUB_USER = 'mb938'
-        SPRINGBOOT_DIR = 'partie2-apps/hello_world'
-        ANGULAR_DIR    = 'partie2-apps/hello-angular'
+        SPRINGBOOT_DIR = 'apps/hello_world'
+        ANGULAR_DIR    = 'apps/hello-angular'
         K8S_NAMESPACE  = 'apps'
         KUBECONFIG     = '/var/jenkins_home/.kube/config-jenkins'
         IMAGE_TAG      = "${BUILD_NUMBER}"
